@@ -41,13 +41,11 @@ dataFile = list.files(path = dlPath)
 if (dataFile != 'activity.csv')
   stop(paste('Data file name is:', dataFile, 'Expected:', 'activity.csv'))
 
-dataFile
+#dataFile
 ```
 
-Take a quick look at the data itself to get a sense of what it includes:
 
 ```{r}
-
 data = read.csv(paste(dlPath, dataFile, sep = ''), na.strings = "NA")
 # Need to remove NAs so that calculations work as expected.
 data = na.omit(data)
@@ -55,8 +53,9 @@ data = na.omit(data)
 # Need to change date field to date from string
 data$date = as.Date(as.character(data$date))
 
-str(data)
-head(data)
+# Take a quick look at the data itself to get a sense of what it includes:
+#str(data)
+#head(data)
 
 
 ```

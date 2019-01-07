@@ -1,25 +1,187 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Reproducible Research Week 2 Project"
+output: html_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
-## Loading and preprocessing the data
+Step 1. Load the data
+Show any code that is needed to process/transform the data (if necessary) into a format suitable for your analysis
+Data is in the course repository https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip
+
+```{r}
+setwd('C:/Users/dansouk/Source/Repos/coursera-datascience-johnshopkins/05-ReproducibleResearch/02-CourseProject/')
+
+basePath = getwd()
+dlPath = paste(basePath, '/repdata_data_activity/', sep = '')
+localFilename <- 'repdata_data_activity.zip'
+
+# Go get the file if needed
+if(!file.exists(dlPath)) {
+  dir.create(dlPath)
+}
+
+if(!file.exists(localFilename)) {
+  download.file(
+    'https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip',
+    localFilename
+  )
+}
+
+# By default, this will extract the files under the current directory. Let's put them in their own subdirectory
+# Oddly enough, we have to remove the trailing / in order for exdir to work properly
+unzip(localFilename, exdir = substr(dlPath, 1, nchar(dlPath) - 1))
+
+# This should return a simple vector showing the filename 'activity.csv'
+dataFile = list.files(path = dlPath)
+
+# Run a quick test
+if (dataFile != 'activity.csv')
+  stop(paste('Data file name is:', dataFile, 'Expected:', 'activity.csv'))
+
+dataFile
+```
+
+Take a quick look at the data itself to get a sense of what it includes:
+
+```{r}
+
+data = read.csv(paste(dlPath, dataFile, sep = ''), na.strings = "NA")
+# Need to remove NAs so that calculations work as expected.
+data = na.omit(data)
+
+# Need to change date field to date from string
+data$date = as.Date(as.character(data$date))
+
+str(data)
+head(data)
 
 
-
-## What is mean total number of steps taken per day?
-
+```
 
 
-## What is the average daily activity pattern?
+Step 2. What is mean total number of steps taken per day? For this part of the assignment, you can ignore the missing values in the dataset.
+
+2.1. Calculate the total number of steps taken per day
+```{r}
+dailyTotals = aggregate(data$steps, by=list(data$date), FUN = sum)
+names(dailyTotals) = c("Date", "tot_steps")
+head(dailyTotals)
+```
+
+2.2 Make a histogram of the total number of steps taken each day
+```{r}
+hist(dailyTotals$tot_steps)
+
+```
+  
+2.3. Calculate and report the mean and median of the total number of steps taken per day
+```{r}
+overallMean = mean(data$steps, na.rm = TRUE)
+overallMedian = summary(data$steps)[3]
+
+```
+
+The average number of steps taken per day is `r overallMean`. The median is `r overallMedian`.
+
+Step 3. What is the average daily activity pattern?
+
+3.1. Make a time series plot (i.e. \color{red}{\verb|type = "l"|}type="l") of the 5-minute interval (x-axis) and the average number of steps taken, 
+averaged across all days (y-axis)
+
+```{r}
+intervalAvgs = aggregate(data$steps, by = list(data$interval), FUN = mean)
+names(intervalAvgs) = c("interval", "avg_steps")
+
+plot(intervalAvgs, type='l')
+
+```
 
 
+3.2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
 
-## Imputing missing values
+```{r}
+
+maxSteps = which(intervalAvgs$avg_steps == max(intervalAvgs$avg_steps))
+intervalAvgs[maxSteps,]
+
+intervalMax = intervalAvgs[maxSteps,]$interval
+intervalMaxStart = format(strptime(sprintf("%04d", intervalMax), format="%H%M"), format = "%H:%M")
+
+```
 
 
+The interval with the highest average number of steps is `r intervalMaxStart`, with `r intervalAvgs[maxSteps,]$avg_steps`.
 
-## Are there differences in activity patterns between weekdays and weekends?
+Step 4. Imputing missing values
+
+4.1 Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+
+```{r}
+# Need to refresh the data from source, since we had to omit NAs earlier.
+data = read.csv(paste(dlPath, dataFile, sep = ''), na.strings = "NA")
+data$date = as.Date(as.character(data$date))
+```
+
+There are `r sprintf("%.1f%%", 100*mean(is.na(data$steps)))` percent missing steps, `r sprintf("%.1f%%", 100*mean(is.na(data$date)))` missing dates and `r sprintf("%.1f%%", 100*mean(is.na(data$interval)))` missing intervals.
+  
+4.2 Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
+
+```{r}
+# This page, http://r-statistics.co/Missing-Value-Treatment-With-R.html, has some interesting and advanced
+# techinques for imputing missing values, but for this script let's just stick with something really basic.
+# I think means for each interval is a logical choice, since there seems to be so much variation by day.
+
+# Remember the data still has NAs, so remove them to calculate the means
+data = na.omit(data)
+intervalMeans = aggregate(data$steps, by = list(data$interval), FUN = mean)
+names(intervalMeans) = c("interval", "avg_steps_interval")
+
+```
+  
+4.3 Create a new dataset that is equal to the original dataset but with the missing data filled in.
+```{r}
+# Need to reload the data again
+data = read.csv(paste(dlPath, dataFile, sep = ''), na.strings = "NA")
+data$date = as.Date(as.character(data$date))
+
+# Now we can update the NAs with the means
+data2 = merge(data, intervalMeans, by = "interval")
+data2$steps_final = ifelse(is.na(data2$steps), data2$avg_steps_interval, data2$steps)
+
+```
+  
+4.4 Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+
+```{r}
+dailyTotals2 = aggregate(data2$steps, by=list(data2$date), FUN = sum)
+names(dailyTotals2) = c("Date", "tot_steps")
+
+hist(dailyTotals2$tot_steps)
+
+overallMean2 = mean(data2$steps_final, na.rm = TRUE)
+overallMedian2 = summary(data2$steps_final)[3]
+
+```
+
+With imputed values for missing steps, the average number of steps taken per day is `r overallMean2`. The median is `r overallMedian2`. The mean is the same as without the imputed values, which is expected since the imputed values were means. The median increases from 0, which is also expected since the NAs were replaced with positive numbers.
+  
+Step 5. Are there differences in activity patterns between weekdays and weekends?
+5.1 Create a new factor variable in the dataset with two levels – “weekday” and “weekend” indicating whether a given date is a weekday or weekend day.
+```{r}
+data2$DayOfWeekType = ifelse(weekdays(data2$date, abbreviate = TRUE) %in% c("Sat","Sun"), "weekend", "weekday")
+```
+  
+5.2 Make a panel plot containing a time series plot (type="l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis).
+```{r}
+library(ggplot2)
+
+dayTypeAvgs = aggregate(data2$steps_final, by = list(data2$interval), FUN = mean)
+
+p = ggplot(data2, aes(interval, steps_final)) + geom_line() + facet_wrap(~ DayOfWeekType, scales = 'fixed')
+p
+
+```
+
